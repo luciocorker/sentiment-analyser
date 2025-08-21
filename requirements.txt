@@ -1,0 +1,10 @@
+streamlit
+textblob
+nrclex
+pandas
+pydub
+plotly
+openpyxl
+SpeechRecognition
+textblob
+nltk
