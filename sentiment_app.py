@@ -352,14 +352,12 @@ def create_batch_emotion_visualizations(df):
     
     # Collect all emotion data for aggregate analysis
     all_emotions_data = []
-    text_emotion_matrix = []
     
     for idx, row in df.iterrows():
         emotion_scores = analyze_emotions(row["Text"])
         if emotion_scores:
             emotion_scores['Text_ID'] = f"Text {idx+1}"
             all_emotions_data.append(emotion_scores)
-            text_emotion_matrix.append(emotion_scores)
     
     if not all_emotions_data:
         st.warning("No emotions detected in the batch texts.")
@@ -689,8 +687,6 @@ def main():
     st.header("Enter Text for Analysis")
     user_text = create_text_input()
 
-    
-
     # --- File Upload Section for Audio ---
     st.header("Or Upload Audio for Analysis")
     uploaded_file = st.file_uploader(
@@ -750,4 +746,16 @@ def main():
                 df_upload = pd.read_csv(uploaded_batch_file)
             else:
                 df_upload = pd.read_excel(uploaded_batch_file)
-            
+            # Try to find a column with 'text' in the name, else use the first column
+            text_col = None
+            for col in df_upload.columns:
+                if "text" in col.lower():
+                    text_col = col
+                    break
+            if text_col is None:
+                text_col = df_upload.columns[0]
+            texts = df_upload[text_col].astype(str).tolist()
+            st.success(f"Loaded {len(texts)} texts from file (column: '{text_col}')")
+        except Exception as e:
+            st.error(f"Could not read file: {e}")
+            file_
