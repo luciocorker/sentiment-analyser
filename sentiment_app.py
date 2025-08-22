@@ -759,3 +759,6 @@ def main():
         except Exception as e:
             st.error(f"Could not read file: {e}")
             file_
+
+        if __name__ == "__main__":
+    main()
