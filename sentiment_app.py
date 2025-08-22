@@ -10,54 +10,12 @@ import plotly.express as px
 import plotly.graph_objects as go
 from nrclex import NRCLex
 import nltk
-import ssl
-
-# Fix SSL certificate issues for NLTK downloads
 try:
-    _create_unverified_https_context = ssl._create_unverified_context
-except AttributeError:
-    pass
-else:
-    ssl._create_default_https_context = _create_unverified_https_context
-
-# Download required NLTK data with error handling
-def download_nltk_data():
-    """Download required NLTK data with comprehensive error handling."""
-    required_data = [
-        'punkt',
-        'averaged_perceptron_tagger',
-        'brown',
-        'conll2000',
-        'punkt_tab'  # New tokenizer for newer NLTK versions
-    ]
-    
-    for data_name in required_data:
-        try:
-            nltk.data.find(f'tokenizers/{data_name}')
-        except LookupError:
-            try:
-                nltk.download(data_name, quiet=True)
-            except Exception as e:
-                st.warning(f"Could not download {data_name}: {e}")
-        except Exception:
-            try:
-                nltk.data.find(f'taggers/{data_name}')
-            except LookupError:
-                try:
-                    nltk.download(data_name, quiet=True)
-                except Exception as e:
-                    st.warning(f"Could not download {data_name}: {e}")
-            except Exception:
-                try:
-                    nltk.data.find(f'corpora/{data_name}')
-                except LookupError:
-                    try:
-                        nltk.download(data_name, quiet=True)
-                    except Exception as e:
-                        st.warning(f"Could not download {data_name}: {e}")
-
-# Download NLTK data at startup
-download_nltk_data()
+    nltk.data.find('tokenizers/punkt')
+    nltk.data.find('taggers/averaged_perceptron_tagger')
+except LookupError:
+    nltk.download('punkt')
+    nltk.download('averaged_perceptron_tagger')
 
 import json
 from io import BytesIO
@@ -175,37 +133,24 @@ def get_sentiment_confidence(polarity):
     return {"Negative": scores[0], "Neutral": scores[1], "Positive": scores[2]}
 
 def extract_keywords(text):
-    """Extract noun phrases as keywords using TextBlob with error handling."""
-    try:
-        blob = TextBlob(text)
-        return list(blob.noun_phrases)
-    except Exception as e:
-        # Fallback: extract basic keywords using simple word filtering
-        st.warning("Advanced keyword extraction unavailable. Using basic extraction.")
-        words = text.lower().split()
-        # Simple keyword extraction: words longer than 3 characters that aren't common stop words
-        stop_words = {'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is', 'are', 'was', 'were', 'been', 'be', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'can', 'this', 'that', 'these', 'those'}
-        keywords = [word.strip('.,!?";()[]{}') for word in words if len(word) > 3 and word not in stop_words]
-        return list(set(keywords))[:10]  # Return unique keywords, limit to 10
+    """Extract noun phrases as keywords using TextBlob."""
+    blob = TextBlob(text)
+    return list(blob.noun_phrases)
 
 def analyze_emotions(text):
-    """Return emotion scores using NRCLex with error handling."""
+    """Return emotion scores using NRCLex."""
     if not text.strip():
         return {}
-    try:
-        emotion_obj = NRCLex(text)
-        # Get raw emotion scores (counts)
-        raw_scores = emotion_obj.raw_emotion_scores
-        total = sum(raw_scores.values())
-        # Normalize to proportions
-        if total > 0:
-            norm_scores = {k: v / total for k, v in raw_scores.items()}
-        else:
-            norm_scores = {}
-        return norm_scores
-    except Exception as e:
-        st.warning("Emotion analysis unavailable.")
-        return {}
+    emotion_obj = NRCLex(text)
+    # Get raw emotion scores (counts)
+    raw_scores = emotion_obj.raw_emotion_scores
+    total = sum(raw_scores.values())
+    # Normalize to proportions
+    if total > 0:
+        norm_scores = {k: v / total for k, v in raw_scores.items()}
+    else:
+        norm_scores = {}
+    return norm_scores
 
 # -------------- SECTION 6: ANALYSIS & RESULTS --------------
 def perform_analysis(text):
@@ -287,15 +232,14 @@ def perform_analysis(text):
 
     # --- Emotion Analysis ---
     st.subheader("🎭 Emotion Analysis")
+    emotion_scores = analyze_emotions(text)
     if emotion_scores:
         emotion_df = pd.DataFrame({
             "Emotion": list(emotion_scores.keys()),
             "Score": list(emotion_scores.values())
         }).sort_values("Score", ascending=False)
         st.bar_chart(emotion_df.set_index("Emotion"))
-        top_emotions = emotion_df[emotion_df["Score"] > 0].Emotion.tolist()
-        if top_emotions:
-            st.write("**Top emotions:**", ", ".join(top_emotions))
+        st.write("**Top emotions:**", ", ".join(emotion_df[emotion_df["Score"] > 0].Emotion.tolist()))
     else:
         st.write("No strong emotions detected in the text.")
 
@@ -352,12 +296,14 @@ def create_batch_emotion_visualizations(df):
     
     # Collect all emotion data for aggregate analysis
     all_emotions_data = []
+    text_emotion_matrix = []
     
     for idx, row in df.iterrows():
         emotion_scores = analyze_emotions(row["Text"])
         if emotion_scores:
             emotion_scores['Text_ID'] = f"Text {idx+1}"
             all_emotions_data.append(emotion_scores)
+            text_emotion_matrix.append(emotion_scores)
     
     if not all_emotions_data:
         st.warning("No emotions detected in the batch texts.")
@@ -687,6 +633,8 @@ def main():
     st.header("Enter Text for Analysis")
     user_text = create_text_input()
 
+    
+
     # --- File Upload Section for Audio ---
     st.header("Or Upload Audio for Analysis")
     uploaded_file = st.file_uploader(
@@ -758,7 +706,133 @@ def main():
             st.success(f"Loaded {len(texts)} texts from file (column: '{text_col}')")
         except Exception as e:
             st.error(f"Could not read file: {e}")
-            file_
+            file_error = True
+    else:
+        # Use pasted input if no file uploaded
+        texts = [line.strip() for line in batch_input.split("\n") if line.strip()]
 
-        if __name__ == "__main__":
+    if st.button("Batch Analyze"):
+        if texts and not file_error:
+            df = batch_process(texts)
+            # Use plain st.dataframe if matplotlib is not installed
+            try:
+                import matplotlib
+                st.dataframe(df.style.background_gradient(subset=["Polarity"], cmap="RdYlBu"))
+            except ImportError:
+                st.dataframe(df)
+            
+            # Comparative Analysis
+            st.subheader("Comparative Analysis")
+            if len(df) > 1:
+                st.write("**Side-by-side Sentiment Comparison:**")
+                st.bar_chart(df[["Polarity", "Subjectivity"]])
+                st.write("**Sentiment Distribution:**")
+                st.write(df["Sentiment"].value_counts())
+                st.write("**Top Keywords Across All Texts:**")
+                all_keywords = []
+                for kw in df["Keywords"]:
+                    all_keywords.extend([k.strip() for k in kw.split(",") if k.strip()])
+                if all_keywords:
+                    keywords_series = pd.Series(all_keywords)
+                    st.write(keywords_series.value_counts().head(10))
+            
+            # Enhanced Batch Emotion Visualizations
+            create_batch_emotion_visualizations(df)
+            
+            # Export options
+            st.subheader("Export Results")
+            export_format = st.selectbox("Select export format", ["CSV", "JSON"] + (["PDF"] if FPDF is not None else []))
+            export_bytes = export_dataframe(df, export_format)
+            if export_bytes:
+                st.download_button(
+                    label=f"Download as {export_format}",
+                    data=export_bytes,
+                    file_name=f"sentiment_results.{export_format.lower()}",
+                    mime={
+                        "CSV": "text/csv",
+                        "JSON": "application/json",
+                        "PDF": "application/pdf"
+                    }[export_format]
+                )
+            else:
+                st.info("PDF export requires the `fpdf` package. Install with `pip install fpdf`.")
+        else:
+            st.warning("Please provide texts via paste or file upload for batch processing.")
+
+
+def batch_process(texts):
+    """Process a list of texts and return a DataFrame with results."""
+    results = []
+    for t in texts:
+        polarity, subjectivity, sentiment, emoji = analyze_sentiment(t)
+        keywords = extract_keywords(t)
+        conf = get_sentiment_confidence(polarity)
+        emotions = analyze_emotions(t)
+        top_emotions = ", ".join([k for k, v in sorted(emotions.items(), key=lambda x: -x[1]) if v > 0])
+        explanation = explain_sentiment(t, polarity, subjectivity, keywords, emotions)
+        results.append({
+            "Text": t,
+            "Sentiment": sentiment,
+            "Polarity": polarity,
+            "Subjectivity": subjectivity,
+            "Confidence_Positive": conf["Positive"],
+            "Confidence_Neutral": conf["Neutral"],
+            "Confidence_Negative": conf["Negative"],
+            "Keywords": ", ".join(keywords),
+            "Emotions": top_emotions,
+            "Explanation": explanation
+        })
+    return pd.DataFrame(results)
+
+
+def export_dataframe(df, export_format):
+    """Export DataFrame as CSV, JSON, or PDF (using fpdf) and return bytes."""
+    if export_format == "CSV":
+        return df.to_csv(index=False).encode("utf-8")
+
+    elif export_format == "JSON":
+        return df.to_json(orient="records", indent=2).encode("utf-8")
+
+    elif export_format == "PDF" and FPDF is not None:
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("Arial", size=10)
+
+        # Title
+        pdf.set_font("Arial", 'B', 14)
+        pdf.cell(200, 10, txt="Sentiment Analysis Results", ln=True, align="C")
+        pdf.ln(10)
+
+        # Column headers
+        pdf.set_font("Arial", 'B', 10)
+        col_width = pdf.w / (len(df.columns) + 1)
+        for col in df.columns:
+            pdf.cell(col_width, 8, str(col), border=1)
+        pdf.ln()
+
+        # Rows
+        pdf.set_font("Arial", size=8)
+        for row in df.itertuples(index=False):
+            for value in row:
+                text_value = str(value)
+                if len(text_value) > 30:  # wrap long text
+                    text_value = text_value[:27] + "..."
+                pdf.cell(col_width, 8, text_value, border=1)
+            pdf.ln()
+
+        # Save to buffer
+        buffer = BytesIO()
+        pdf.output(buffer)
+        buffer.seek(0)
+        return buffer.getvalue()
+
+    else:
+        return None
+
+
+if __name__ == "__main__":
     main()
+
+
+
+       
